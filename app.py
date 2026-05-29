@@ -1,3 +1,6 @@
+import os
+import psycopg2
+from urllib.parse import urlparse
 from flask import Flask, render_template, request, redirect, url_for, flash
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 import mysql.connector
@@ -13,12 +16,27 @@ login_manager.init_app(app)
 login_manager.login_view = 'login'
 
 def get_db_connection():
-    return mysql.connector.connect(
-        host=app.config['MYSQL_HOST'],
-        user=app.config['MYSQL_USER'],
-        password=app.config['MYSQL_PASSWORD'],
-        database=app.config['MYSQL_DB']
-    )
+    database_url = os.getenv('DATABASE_URL')
+    
+    if database_url:
+        # PostgreSQL connection for Render
+        result = urlparse(database_url)
+        return psycopg2.connect(
+            database=result.path[1:],
+            user=result.username,
+            password=result.password,
+            host=result.hostname,
+            port=result.port
+        )
+    else:
+        # Local fallback (MySQL)
+        import mysql.connector
+        return mysql.connector.connect(
+            host=app.config['MYSQL_HOST'],
+            user=app.config['MYSQL_USER'],
+            password=app.config['MYSQL_PASSWORD'],
+            database=app.config['MYSQL_DB']
+        )
 
 class User(UserMixin):
     def __init__(self, id, email, is_admin=False):
