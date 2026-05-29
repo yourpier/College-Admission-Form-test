@@ -105,7 +105,7 @@ def admission_form():
                 conn.close()
                 return redirect(url_for('admission_form'))
 
-            # Insert Applicant and get ID (PostgreSQL way)
+            # Insert Applicant
             cursor.execute("INSERT INTO applicants DEFAULT VALUES RETURNING applicant_id")
             applicant_id = cursor.fetchone()[0]
 
@@ -140,6 +140,14 @@ def admission_form():
                 if school_name and school_name.strip():
                     education_level_id = {"Elementary":1, "Junior High":2, "Senior High":3, "College":4}.get(level_name)
                     education_type_id = 1 if request.form.get(type_field) == "Public" else 2
+                    
+                    year_from = request.form.get(from_field)
+                    year_to = request.form.get(to_field)
+                    
+                    # Handle "Present" case
+                    if year_to and year_to.strip().lower() == "present":
+                        year_to = None
+
                     cursor.execute("""
                         INSERT INTO educational_attainment 
                         (applicant_id, education_level_id, school_name, school_address, 
@@ -147,7 +155,7 @@ def admission_form():
                         VALUES (%s, %s, %s, %s, %s, %s, %s)
                     """, (applicant_id, education_level_id, school_name,
                           request.form.get(addr_field), education_type_id,
-                          request.form.get(from_field), request.form.get(to_field)))
+                          year_from, year_to))
 
             # User Account
             hashed_password = generate_password_hash(password)
