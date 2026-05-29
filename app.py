@@ -22,14 +22,13 @@ def get_db_connection():
     if database_url:
         # PostgreSQL on Render
         result = urlparse(database_url)
-        conn = psycopg2.connect(
+        return psycopg2.connect(
             database=result.path[1:],
             user=result.username,
             password=result.password,
             host=result.hostname,
             port=result.port
         )
-        return conn
     else:
         # Local MySQL fallback
         return mysql.connector.connect(
@@ -38,6 +37,14 @@ def get_db_connection():
             password=app.config['MYSQL_PASSWORD'],
             database=app.config['MYSQL_DB']
         )
+
+def get_cursor(conn):
+    """Return correct cursor for PostgreSQL or MySQL"""
+    if isinstance(conn, psycopg2.extensions.connection):
+        return conn.cursor(cursor_factory=RealDictCursor)
+    else:
+        return conn.cursor(dictionary=True)
+
 class User(UserMixin):
     def __init__(self, id, email, is_admin=False):
         self.id = id
@@ -48,11 +55,7 @@ class User(UserMixin):
 def load_user(user_id):
     conn = get_db_connection()
     try:
-        if isinstance(conn, psycopg2.extensions.connection):  # PostgreSQL
-            cursor = conn.cursor(cursor_factory=RealDictCursor)
-        else:  # MySQL
-            cursor = conn.cursor(dictionary=True)
-        
+        cursor = get_cursor(conn)
         cursor.execute("SELECT * FROM users WHERE user_id = %s", (user_id,))
         user = cursor.fetchone()
         
@@ -71,7 +74,6 @@ def admission_form():
             conn = get_db_connection()
             cursor = conn.cursor()
 
-            # Extract all form data
             last_name = request.form['last_name']
             first_name = request.form['first_name']
             middle_name = request.form['middle_name']
@@ -82,7 +84,7 @@ def admission_form():
             citizenship = request.form.get('citizenship', 'Filipino')
             primary_contact_number = request.form['primary_contact_number']
             primary_contact_email = request.form['primary_contact_email']
-            password = request.form['password']                    # ← This was missing
+            password = request.form['password']
             track_strand = request.form['track_strand']
             course_first_choice = request.form['course_first_choice']
             course_second_choice = request.form.get('course_second_choice')
@@ -99,10 +101,11 @@ def admission_form():
             cursor.execute("SELECT email FROM users WHERE email = %s", (primary_contact_email,))
             if cursor.fetchone():
                 flash('This email is already registered. Please use a different email.', 'error')
+                conn.close()
                 return redirect(url_for('admission_form'))
 
             # Insert Applicant
-            cursor.execute("INSERT INTO applicants () VALUES ()")
+            cursor.execute("INSERT INTO applicants DEFAULT VALUES")
             applicant_id = cursor.lastrowid
 
             # Personal Information
@@ -136,7 +139,6 @@ def admission_form():
                 if school_name and school_name.strip():
                     education_level_id = {"Elementary":1, "Junior High":2, "Senior High":3, "College":4}.get(level_name)
                     education_type_id = 1 if request.form.get(type_field) == "Public" else 2
-
                     cursor.execute("""
                         INSERT INTO educational_attainment 
                         (applicant_id, education_level_id, school_name, school_address, 
@@ -170,10 +172,11 @@ def admission_form():
         except Exception as e:
             print("❌ Error submitting application:", str(e))
             flash('Error submitting application. Please check all fields.', 'error')
+            if 'conn' in locals():
+                conn.close()
             return redirect(url_for('admission_form'))
 
     return render_template('admission-form.html')
-    
 
 # ====================== EDIT APPLICATION ======================
 @app.route('/edit_application', methods=['GET', 'POST'])
@@ -184,8 +187,7 @@ def edit_application():
         return redirect(url_for('admin_dashboard'))
 
     conn = get_db_connection()
-    cursor = conn.cursor(dictionary=True)
-
+    cursor = get_cursor(conn)
     cursor.execute("""
         SELECT p.*, a.* 
         FROM personal_information p
@@ -201,8 +203,7 @@ def edit_application():
 
     if request.method == 'POST':
         try:
-            print("Form Data:", dict(request.form))
-
+            cursor = get_cursor(conn)
             cursor.execute("""
                 UPDATE personal_information 
                 SET last_name = %s, first_name = %s, middle_name = %s, name_suffix = %s,
@@ -230,7 +231,6 @@ def edit_application():
             ))
 
             conn.commit()
-            print("✅ UPDATE SUCCESSFUL!")
             flash('✅ Application updated successfully!', 'success')
             return redirect(url_for('user_dashboard'))
 
@@ -254,7 +254,7 @@ def login():
         password = request.form.get('password')
 
         conn = get_db_connection()
-        cursor = conn.cursor(dictionary=True)
+        cursor = get_cursor(conn)
         cursor.execute("SELECT * FROM users WHERE email = %s", (email,))
         user = cursor.fetchone()
         conn.close()
@@ -277,7 +277,7 @@ def login():
 @login_required
 def user_dashboard():
     conn = get_db_connection()
-    cursor = conn.cursor(dictionary=True)
+    cursor = get_cursor(conn)
     cursor.execute("""
         SELECT p.*, s.status, a.*
         FROM personal_information p 
@@ -297,10 +297,9 @@ def admin_dashboard():
         return redirect(url_for('user_dashboard'))
 
     conn = get_db_connection()
-    cursor = conn.cursor(dictionary=True)
+    cursor = get_cursor(conn)
 
     try:
-        # Statistics
         cursor.execute("SELECT COUNT(*) as total FROM applicants")
         total = cursor.fetchone()['total']
 
@@ -310,7 +309,6 @@ def admin_dashboard():
         cursor.execute("SELECT COUNT(*) as approved FROM personal_information WHERE status_id = 2")
         approved = cursor.fetchone()['approved']
 
-        # Personal Information
         cursor.execute("""
             SELECT p.*, s.status 
             FROM personal_information p 
@@ -319,11 +317,9 @@ def admin_dashboard():
         """)
         personal_info = cursor.fetchall()
 
-        # Address
         cursor.execute("SELECT * FROM address ORDER BY applicant_id DESC")
         addresses = cursor.fetchall()
 
-        # Educational Attainment 
         cursor.execute("""
             SELECT e.*, el.education_level, et.education_type
             FROM educational_attainment e
@@ -333,7 +329,6 @@ def admin_dashboard():
         """)
         education = cursor.fetchall()
 
-        # College Transferees
         cursor.execute("SELECT * FROM college_transferees ORDER BY applicant_id DESC")
         transferees = cursor.fetchall()
 
@@ -351,7 +346,7 @@ def admin_dashboard():
                          approved=approved,
                          personal_info=personal_info, 
                          addresses=addresses,
-                         education=education,           # ← Added this
+                         education=education,
                          transferees=transferees)
 
 @app.route('/admin/update_status', methods=['POST'])
