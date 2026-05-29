@@ -47,14 +47,21 @@ class User(UserMixin):
 @login_manager.user_loader
 def load_user(user_id):
     conn = get_db_connection()
-    cursor = conn.cursor(dictionary=True)
-    cursor.execute("SELECT * FROM users WHERE user_id = %s", (user_id,))
-    user = cursor.fetchone()
-    conn.close()
-    if user:
-        is_admin = user.get('user_type') == 'Admin'
-        return User(user['user_id'], user['email'], is_admin)
-    return None
+    try:
+        if isinstance(conn, psycopg2.extensions.connection):  # PostgreSQL
+            cursor = conn.cursor(cursor_factory=RealDictCursor)
+        else:  # MySQL
+            cursor = conn.cursor(dictionary=True)
+        
+        cursor.execute("SELECT * FROM users WHERE user_id = %s", (user_id,))
+        user = cursor.fetchone()
+        
+        if user:
+            is_admin = user.get('user_type') == 'Admin'
+            return User(user['user_id'], user['email'], is_admin)
+        return None
+    finally:
+        conn.close()
 
 # ====================== ADMISSION FORM ======================
 @app.route('/admission_form', methods=['GET', 'POST'])
