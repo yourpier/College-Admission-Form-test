@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Application — LSPU Admission</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body class="dashboard-page">
+
+    <div class="dashboard-header no-print">
+        <div>
+            <h1>My Application</h1>
+            <p>{{ current_user.email }}</p>
+        </div>
+        <a href="{{ url_for('logout') }}" class="logout-btn">Sign Out</a>
+    </div>
+
+    <div class="dashboard-body">
+
+        {% if application %}
+        <!-- Status & ID Card -->
+        <div class="dashboard-card">
+            <h2>📋 Application Overview</h2>
+            <div class="info-grid">
+                <div class="info-item">
+                    <div class="label">Applicant ID</div>
+                    <div class="value applicant-id-badge">#{{ application.applicant_id }}</div>
+                </div>
+                <div class="info-item">
+                    <div class="label">Application Status</div>
+                    <div class="value" style="margin-top:4px;">
+                        <span class="status-badge 
+                            {% if application.status == 'Approved' %}status-approved
+                            {% elif application.status == 'Rejected' %}status-rejected
+                            {% else %}status-pending{% endif %}">
+                            {% if application.status == 'Approved' %}✓{% elif application.status == 'Rejected' %}✗{% else %}⏳{% endif %}
+                            {{ application.status }}
+                        </span>
+                    </div>
+                </div>
+                <div class="info-item">
+                    <div class="label">Full Name</div>
+                    <div class="value">{{ application.first_name }} {{ application.middle_name }} {{ application.last_name }}</div>
+                </div>
+                <div class="info-item">
+                    <div class="label">Course Applied</div>
+                    <div class="value">{{ application.course_first_choice }}</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Contact Info -->
+        <div class="dashboard-card">
+            <h2>📞 Contact Information</h2>
+            <div class="info-grid">
+                <div class="info-item">
+                    <div class="label">Contact Number</div>
+                    <div class="value">{{ application.primary_contact_number }}</div>
+                </div>
+                <div class="info-item">
+                    <div class="label">Email Address</div>
+                    <div class="value">{{ application.primary_contact_email }}</div>
+                </div>
+            </div>
+            <div class="info-item" style="margin-top:14px;">
+                <div class="label">Permanent Address</div>
+                <div class="value" style="font-size:0.95rem;">
+                    {{ application.house_number }} {{ application.street }},
+                    {{ application.town }}, {{ application.city }},
+                    {{ application.province }} {{ application.postal_code }}
+                </div>
+            </div>
+        </div>
+
+        <!-- Academic Info -->
+        <div class="dashboard-card">
+            <h2>🎓 Academic Details</h2>
+            <div class="info-grid">
+                <div class="info-item">
+                    <div class="label">Track / Strand</div>
+                    <div class="value">{{ application.track_strand or '—' }}</div>
+                </div>
+                <div class="info-item">
+                    <div class="label">Second Choice Course</div>
+                    <div class="value">{{ application.course_second_choice or '—' }}</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="dashboard-card no-print">
+            <button onclick="printApplication()" class="btn-print">
+                🖨 Print / Save as PDF
+            </button>
+            <a href="{{ url_for('edit_application') }}" class="btn btn-primary" style="display:flex; justify-content:center;">
+                ✏️ Edit My Application
+            </a>
+        </div>
+
+        {% else %}
+        <div class="dashboard-card" style="text-align:center; padding: 50px 30px;">
+            <p style="color:var(--text-muted); font-size:1.1rem;">You don't have an active application yet.</p>
+            <a href="{{ url_for('admission_form') }}" class="btn btn-primary" style="width:auto; display:inline-flex; margin-top:20px;">
+                Apply Now →
+            </a>
+        </div>
+        {% endif %}
+
+    </div>
+
+<script>
+function printApplication() { window.print(); }
+</script>
+</body>
+</html>
