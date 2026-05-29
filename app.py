@@ -7,6 +7,7 @@ import mysql.connector
 from werkzeug.security import generate_password_hash, check_password_hash
 from config import Config
 from datetime import date
+from psycopg2.extras import RealDictCursor
 
 app = Flask(__name__)
 app.config.from_object(Config)
@@ -19,25 +20,24 @@ def get_db_connection():
     database_url = os.getenv('DATABASE_URL')
     
     if database_url:
-        # PostgreSQL connection for Render
+        # PostgreSQL on Render
         result = urlparse(database_url)
-        return psycopg2.connect(
+        conn = psycopg2.connect(
             database=result.path[1:],
             user=result.username,
             password=result.password,
             host=result.hostname,
             port=result.port
         )
+        return conn
     else:
-        # Local fallback (MySQL)
-        import mysql.connector
+        # Local MySQL fallback
         return mysql.connector.connect(
             host=app.config['MYSQL_HOST'],
             user=app.config['MYSQL_USER'],
             password=app.config['MYSQL_PASSWORD'],
             database=app.config['MYSQL_DB']
         )
-
 class User(UserMixin):
     def __init__(self, id, email, is_admin=False):
         self.id = id
