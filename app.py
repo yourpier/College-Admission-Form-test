@@ -74,6 +74,7 @@ def admission_form():
             conn = get_db_connection()
             cursor = conn.cursor()
 
+            # Extract all form data
             last_name = request.form['last_name']
             first_name = request.form['first_name']
             middle_name = request.form['middle_name']
@@ -104,9 +105,9 @@ def admission_form():
                 conn.close()
                 return redirect(url_for('admission_form'))
 
-            # Insert Applicant
-            cursor.execute("INSERT INTO applicants DEFAULT VALUES")
-            applicant_id = cursor.lastrowid
+            # Insert Applicant and get ID (PostgreSQL way)
+            cursor.execute("INSERT INTO applicants DEFAULT VALUES RETURNING applicant_id")
+            applicant_id = cursor.fetchone()[0]
 
             # Personal Information
             cursor.execute("""
@@ -165,7 +166,7 @@ def admission_form():
                       request.form.get('gwa'), date.today(), request.form.get('lrn')))
 
             conn.commit()
-            print("✅ Application submitted successfully!")
+            print("✅ Application submitted successfully! ID:", applicant_id)
             conn.close()
             return redirect(url_for('admission_form', success=1, id=applicant_id))
 
